@@ -7,7 +7,7 @@ import numpy as np
 import joblib
 import mediapipe as mp
 
-# Configurações
+# Configurações para rodar o modelo de IA
 MODEL_PATH = "random_forest_model_balanced_3.pkl"
 CLASSES = [
     "Amarelo", "Barulho", "Vacina", "Medo",
@@ -16,10 +16,10 @@ CLASSES = [
 EXPECTED_LANDMARK_SIZE = 162
 RESOLUTION = (960, 540)  # Reduzido para interface
 
-# Carregar o modelo
+# Carregar o modelo da IA treinada
 model = joblib.load(MODEL_PATH)
 
-# Inicializar MediaPipe
+# Inicializar MediaPipe pra leitura de presença de maos
 mp_hands = mp.solutions.hands
 mp_pose = mp.solutions.pose
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.3)
@@ -30,7 +30,7 @@ class App:
         self.root = root
         self.root.title("Reconhecimento de Libras")
 
-        # Elementos da interface
+        # Elementos da interface da aplicação simples
         self.video_label = tk.Label(root)
         self.video_label.pack()
         self.text_label = tk.Label(root, text="Palavra identificada: Processando...", font=("Arial", 16))
@@ -44,7 +44,7 @@ class App:
         self.running = False
 
     def load_video(self):
-        # Abrir janela de seleção de arquivo
+        # codigo para abrir janela de seleção de arquivo
         video_path = filedialog.askopenfilename(
             filetypes=[("Arquivos de vídeo", "*.mp4")],
             title="Selecione um vídeo para processar",
@@ -72,19 +72,19 @@ class App:
             if not ret:
                 break
 
-            # Redimensionar o frame para interface
+            # Redimensiona o frame para interface
             frame = cv2.resize(frame, RESOLUTION)
 
-            # Converter para RGB
+            # Converte para RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             hand_results = hands.process(rgb_frame)
             pose_results = pose.process(rgb_frame)
 
             landmarks = []
             frame_count = 0  # Inicializa o contador de frames
-            # Adicionar landmarks das mãos
+            # Adiciona landmarks das mãos
             if hand_results.multi_hand_landmarks:
-                # Adiciona landmarks das mãos
+                
                 for hand_landmarks in hand_results.multi_hand_landmarks:
                     for lm in hand_landmarks.landmark:
                         landmarks.extend([lm.x, lm.y, lm.z])
@@ -94,16 +94,16 @@ class App:
                 continue
 
 
-            # Adicionar landmarks da pose
+            # Adiciona landmarks da pose
             if pose_results.pose_landmarks:
                 for lm in pose_results.pose_landmarks.landmark:
                     landmarks.extend([lm.x, lm.y, lm.z])
 
-            # Garantir consistência no número de landmarks
+            # Garanti consistência no número de landmarks
             if len(landmarks) < EXPECTED_LANDMARK_SIZE:
                 landmarks.extend([0.0] * (EXPECTED_LANDMARK_SIZE - len(landmarks)))
 
-            # Armazenar landmarks válidos
+            # Armazena landmarks válidos
             if len(landmarks) == EXPECTED_LANDMARK_SIZE:
                 self.landmarks_list.append(landmarks)
 
@@ -139,7 +139,7 @@ class App:
         else:
             self.text_label.config(text="Nenhuma palavra identificada!")
 
-# Inicializar a aplicação
+# Inicializa a aplicação
 if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)

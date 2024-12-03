@@ -71,15 +71,15 @@ def save_combined_landmarks(video_path, output_dir):
     hands.close()
     pose.close()
 
-# Loop para processar todas as combinações
+# processa todas as combinações
 for palavra_idx, palavra in enumerate(palavras, start=1):
     palavra_code = f"{palavra_idx:02}"  # Garante que o código tenha dois dígitos
     for sinalizador in range(1, 13):  # Sinalizadores 01 a 12
         for video_num in range(1, 6):  # Vídeos 1 a 5
-            # Construir o caminho do vídeo
+            # Constroi o caminho do vídeo
             video_path = f"videos/{palavra_code}{palavra}Sinalizador{sinalizador:02}-{video_num}.mp4"
             
-            # Construir o diretório de saída
+            # Constroi o diretório de saída
             output_dir = f"frames2/{palavra.lower()}/Sinalizador{sinalizador:02}/v{video_num}"
             
             print(f"Processando: {video_path} -> {output_dir}")

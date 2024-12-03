@@ -15,7 +15,7 @@ CLASSES = [
     "Espelho", "Banheiro"
 ]
 
-# Função para padronizar tamanhos dos arrays
+# padroniza tamanhos dos arrays
 def standardize_features(features):
     max_length = max(feature.shape[0] for feature in features)
     standardized = []
@@ -25,7 +25,7 @@ def standardize_features(features):
         standardized.append(padded)
     return np.array(standardized)
 
-# Função para carregar centróides e montar o dataset
+# carrega centróides e montar o dataset
 def load_centroid_data(base_dir, classes):
     dataset = []
     for class_label, palavra in enumerate(classes):
@@ -45,47 +45,47 @@ def load_centroid_data(base_dir, classes):
                             print(f"Erro ao carregar {centroid_path}: {e}")
     return pd.DataFrame(dataset)
 
-# Carregar os dados
+# Carrega os dados
 df = load_centroid_data(BASE_DIR, CLASSES)
 
-# Padronizar features
+# Padroniza features
 print("Padronizando os tamanhos das features...")
 standardized_features = standardize_features(df['features'].values)
 
-# Converter para arrays numpy
+# Converte para arrays numpy
 X = np.array(standardized_features)
 y = df['class'].values
 
-# Verificar distribuição de classes
+# Verifica distribuição de classes
 class_counts = Counter(y)
 print("Distribuição de classes no dataset antes do oversampling:")
 for class_label, count in class_counts.items():
     print(f"{CLASSES[class_label]}: {count} amostras")
 
-# Balancear as classes
+# Balancea as classes
 ros = RandomOverSampler(random_state=42)
 X_resampled, y_resampled = ros.fit_resample(X, y)
 
-# Verificar distribuição após balanceamento
+# Verifica distribuição após balanceamento
 class_counts = Counter(y_resampled)
 print("\nDistribuição de classes no dataset após o oversampling:")
 for class_label, count in class_counts.items():
     print(f"{CLASSES[class_label]}: {count} amostras")
 
-# Dividir os dados em treino e teste
+# Dividi os dados em treino e teste
 X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42, stratify=y_resampled)
 
-# Treinar o modelo
+# Treina o modelo
 clf = RandomForestClassifier(n_estimators=100, random_state=42)
 clf.fit(X_train, y_train)
 
-# Avaliar o modelo
+# Avalia o modelo
 y_pred = clf.predict(X_test)
 unique_classes = np.unique(y_test)
 print("\nAcurácia no conjunto de teste:", accuracy_score(y_test, y_pred))
 print("\nRelatório de Classificação:\n", classification_report(y_test, y_pred, target_names=[CLASSES[i] for i in unique_classes], zero_division=0))
 
-# Salvar o modelo
+# Salva o modelo
 model_path = "random_forest_model_balanced_3.pkl"
 joblib.dump(clf, model_path)
 print(f"Modelo salvo como {model_path}")

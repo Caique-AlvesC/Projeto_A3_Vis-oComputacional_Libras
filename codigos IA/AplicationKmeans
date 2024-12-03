@@ -10,21 +10,21 @@ palavras = [
 ]
 
 # Configuração do número de clusters
-NUM_CLUSTERS = 10  # Ajuste conforme necessário
+NUM_CLUSTERS = 10  
 
 # Caminho base das pastas de landmarks
 BASE_DIR = "frames2"
 
-# Função para aplicar K-Means nos landmarks
+# aplica K-Means nos landmarks
 def process_kmeans(input_path, output_path, n_clusters):
-    # Carregar os landmarks do arquivo .npy
+    # Carrega os landmarks do arquivo .npy
     data = np.load(input_path)
 
-    # Aplicar K-Means
+    # Aplica K-Means
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     kmeans.fit(data)
 
-    # Salvar os centróides
+    # Salva os centróides
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     np.save(output_path, kmeans.cluster_centers_)
     print(f"Centróides salvos em {output_path}")
