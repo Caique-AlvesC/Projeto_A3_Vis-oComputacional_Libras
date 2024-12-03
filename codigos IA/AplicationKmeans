@@ -1,0 +1,56 @@
+import numpy as np
+import os
+from sklearn.cluster import KMeans
+
+# Lista de palavras em ordem alfabética
+palavras = [
+    "Acontecer", "Aluno", "Amarelo", "América", "Aproveitar", "Bala", "Banco", "Banheiro",
+    "Barulho", "Cinco", "Conhecer", "Espelho", "Esquina", "Filho", "Maçã", "Medo", 
+    "Ruim", "Sapo", "Vacina", "Vontade"
+]
+
+# Configuração do número de clusters
+NUM_CLUSTERS = 10  # Ajuste conforme necessário
+
+# Caminho base das pastas de landmarks
+BASE_DIR = "frames2"
+
+# Função para aplicar K-Means nos landmarks
+def process_kmeans(input_path, output_path, n_clusters):
+    # Carregar os landmarks do arquivo .npy
+    data = np.load(input_path)
+
+    # Aplicar K-Means
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans.fit(data)
+
+    # Salvar os centróides
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    np.save(output_path, kmeans.cluster_centers_)
+    print(f"Centróides salvos em {output_path}")
+
+# Contador de arquivos processados
+arquivos_processados = 0
+
+# Loop para processar todas as combinações de palavras, sinalizadores e vídeos
+for palavra in palavras:
+    palavra_dir = f"{BASE_DIR}/{palavra.lower()}"
+    for sinalizador in range(1, 13):  # Sinalizadores 01 a 12
+        for video_num in range(1, 6):  # Vídeos 1 a 5
+            # Caminho do arquivo de entrada (.npy)
+            input_path = f"{palavra_dir}/Sinalizador{sinalizador:02}/v{video_num}/landmarks.npy"
+            # Caminho do arquivo de saída (.npy)
+            output_path = f"{palavra_dir}/Sinalizador{sinalizador:02}/v{video_num}/centroids.npy"
+            
+            # Verifica se o arquivo de entrada existe
+            if os.path.exists(input_path):
+                try:
+                    process_kmeans(input_path, output_path, NUM_CLUSTERS)
+                    arquivos_processados += 1
+                except Exception as e:
+                    print(f"Erro ao processar {input_path}: {e}")
+            else:
+                print(f"Arquivo não encontrado: {input_path}")
+
+# Mensagem de confirmação ao final
+print(f"Processamento concluído. Total de arquivos processados: {arquivos_processados}")

@@ -1,0 +1,146 @@
+import os
+import tkinter as tk
+from tkinter import filedialog
+import cv2
+from PIL import Image, ImageTk
+import numpy as np
+import joblib
+import mediapipe as mp
+
+# Configurações
+MODEL_PATH = "random_forest_model_balanced_3.pkl"
+CLASSES = [
+    "Amarelo", "Barulho", "Vacina", "Medo",
+    "Espelho", "Banheiro"
+]
+EXPECTED_LANDMARK_SIZE = 162
+RESOLUTION = (960, 540)  # Reduzido para interface
+
+# Carregar o modelo
+model = joblib.load(MODEL_PATH)
+
+# Inicializar MediaPipe
+mp_hands = mp.solutions.hands
+mp_pose = mp.solutions.pose
+hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.3)
+pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.3)
+
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Reconhecimento de Libras")
+
+        # Elementos da interface
+        self.video_label = tk.Label(root)
+        self.video_label.pack()
+        self.text_label = tk.Label(root, text="Palavra identificada: Processando...", font=("Arial", 16))
+        self.text_label.pack()
+        self.load_button = tk.Button(root, text="Carregar Vídeo", command=self.load_video)
+        self.load_button.pack()
+        self.video_frames = []
+        self.landmarks_list = []
+        self.current_frame = 0
+        self.predicted_word = None
+        self.running = False
+
+    def load_video(self):
+        # Abrir janela de seleção de arquivo
+        video_path = filedialog.askopenfilename(
+            filetypes=[("Arquivos de vídeo", "*.mp4")],
+            title="Selecione um vídeo para processar",
+            initialdir=os.getcwd()  # Inicia no diretório atual
+        )
+        if video_path:
+            self.reset_video()
+            self.process_video(video_path)
+
+    def reset_video(self):
+        """Resetar configurações ao carregar novo vídeo."""
+        self.predicted_word = None
+        self.video_frames = []
+        self.landmarks_list = []
+        self.current_frame = 0
+        self.running = False
+        self.text_label.config(text="Palavra identificada: Processando...")
+
+    def process_video(self, video_path):
+        """Carregar frames do vídeo e preparar processamento de landmarks."""
+        cap = cv2.VideoCapture(video_path)
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Redimensionar o frame para interface
+            frame = cv2.resize(frame, RESOLUTION)
+
+            # Converter para RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            hand_results = hands.process(rgb_frame)
+            pose_results = pose.process(rgb_frame)
+
+            landmarks = []
+            frame_count = 0  # Inicializa o contador de frames
+            # Adicionar landmarks das mãos
+            if hand_results.multi_hand_landmarks:
+                # Adiciona landmarks das mãos
+                for hand_landmarks in hand_results.multi_hand_landmarks:
+                    for lm in hand_landmarks.landmark:
+                        landmarks.extend([lm.x, lm.y, lm.z])
+            else:
+                # Pula o frame se nenhuma mão for detectada
+                print(f"Frame {frame_count}: Nenhuma mão detectada.")
+                continue
+
+
+            # Adicionar landmarks da pose
+            if pose_results.pose_landmarks:
+                for lm in pose_results.pose_landmarks.landmark:
+                    landmarks.extend([lm.x, lm.y, lm.z])
+
+            # Garantir consistência no número de landmarks
+            if len(landmarks) < EXPECTED_LANDMARK_SIZE:
+                landmarks.extend([0.0] * (EXPECTED_LANDMARK_SIZE - len(landmarks)))
+
+            # Armazenar landmarks válidos
+            if len(landmarks) == EXPECTED_LANDMARK_SIZE:
+                self.landmarks_list.append(landmarks)
+
+            self.video_frames.append(frame)
+
+        cap.release()
+        self.running = True
+        self.update_frame()
+
+    def update_frame(self):
+        """Atualizar os frames na interface e realizar predição após o vídeo."""
+        if self.running and self.video_frames:
+            frame = self.video_frames[self.current_frame]
+            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+            # Predição após o último frame
+            if self.current_frame == len(self.video_frames) - 1 and not self.predicted_word:
+                self.predict_word()
+
+            self.current_frame = (self.current_frame + 1) % len(self.video_frames)
+            self.root.after(33, self.update_frame)  # Aproximadamente 30 fps
+
+    def predict_word(self):
+        """Realizar a predição com base nos landmarks."""
+        if self.landmarks_list:
+            mean_landmarks = np.mean(self.landmarks_list, axis=0)
+            prediction = model.predict([mean_landmarks])
+            self.predicted_word = CLASSES[prediction[0]]
+            self.text_label.config(text=f"Palavra identificada: {self.predicted_word}")
+        else:
+            self.text_label.config(text="Nenhuma palavra identificada!")
+
+# Inicializar a aplicação
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()

@@ -1,0 +1,120 @@
+import tkinter as tk
+from PIL import Image, ImageTk
+import cv2
+import numpy as np
+import joblib
+import mediapipe as mp
+
+# Configurações
+MODEL_PATH = "random_forest_model_balanced_3.pkl"
+CLASSES = [
+    "Amarelo", "Barulho", "Vacina", "Medo",
+    "Espelho", "Banheiro"
+]
+EXPECTED_LANDMARK_SIZE = 162
+RESOLUTION = (960, 540)  # Resolução para exibição
+
+# Carregar o modelo
+model = joblib.load(MODEL_PATH)
+
+# Inicializar MediaPipe
+mp_hands = mp.solutions.hands
+mp_pose = mp.solutions.pose
+hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.3)
+pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.3)
+
+class WebcamApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Reconhecimento de Libras via Webcam")
+
+        # Elementos da interface
+        self.video_label = tk.Label(root)
+        self.video_label.pack()
+        self.text_label = tk.Label(root, text="Palavra identificada: Processando...", font=("Arial", 16))
+        self.text_label.pack()
+
+        # Webcam
+        self.cap = cv2.VideoCapture(0)  # Captura da webcam
+        self.landmarks_list = []
+        self.running = True
+
+        # Iniciar o loop da webcam
+        self.update_frame()
+
+    def update_frame(self):
+        """Capturar frames da webcam e processar os landmarks em tempo real."""
+        if self.running and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if not ret:
+                self.text_label.config(text="Erro na captura da webcam!")
+                return
+
+            # Redimensionar e converter o frame para RGB
+            frame = cv2.resize(frame, RESOLUTION)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Processar landmarks
+            hand_results = hands.process(rgb_frame)
+            pose_results = pose.process(rgb_frame)
+
+            landmarks = []
+
+            # Adicionar landmarks das mãos
+            if hand_results.multi_hand_landmarks:
+                # Processar landmarks e enviar para a IA
+                landmarks = []
+                for hand_landmarks in hand_results.multi_hand_landmarks:
+                    for lm in hand_landmarks.landmark:
+                        landmarks.extend([lm.x, lm.y, lm.z])
+
+                # Adicione landmarks do corpo (se necessário)
+                # Verifique a consistência no tamanho antes de usar no modelo
+                if len(landmarks) == EXPECTED_LANDMARK_SIZE:
+                    self.landmarks_list.append(landmarks)
+            else:
+                # Não adiciona landmarks nem realiza predição
+                self.text_label.config(text="Nenhuma mão detectada!")
+                        # Adicionar landmarks da pose
+                if pose_results.pose_landmarks:
+                            for lm in pose_results.pose_landmarks.landmark:
+                                landmarks.extend([lm.x, lm.y, lm.z])
+
+            # Garantir consistência no número de landmarks
+            if len(landmarks) < EXPECTED_LANDMARK_SIZE:
+                landmarks.extend([0.0] * (EXPECTED_LANDMARK_SIZE - len(landmarks)))
+
+            # Armazenar landmarks válidos
+            if len(landmarks) == EXPECTED_LANDMARK_SIZE:
+                self.landmarks_list.append(landmarks)
+                # Manter apenas os últimos 10 frames
+                if len(self.landmarks_list) > 10:
+                    self.landmarks_list.pop(0)
+
+            # Realizar predição após capturar landmarks suficientes
+            if len(self.landmarks_list) == 10:
+                mean_landmarks = np.mean(self.landmarks_list, axis=0)
+                prediction = model.predict([mean_landmarks])
+                predicted_word = CLASSES[prediction[0]]
+                self.text_label.config(text=f"Palavra identificada: {predicted_word}")
+
+            # Exibir o frame na interface
+            img = Image.fromarray(rgb_frame)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+        self.root.after(10, self.update_frame)  # Atualizar a cada 10ms (~100 fps)
+
+    def stop(self):
+        """Parar a captura da webcam."""
+        self.running = False
+        self.cap.release()
+        self.root.destroy()
+
+# Inicializar a aplicação
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = WebcamApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.stop)  # Garantir que a webcam seja liberada ao fechar
+    root.mainloop()

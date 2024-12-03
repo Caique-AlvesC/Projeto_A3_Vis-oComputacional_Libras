@@ -1,0 +1,92 @@
+import os
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from collections import Counter
+from imblearn.over_sampling import RandomOverSampler
+import joblib
+
+# Configurações
+BASE_DIR = "frames2"
+CLASSES = [
+    "Amarelo", "Barulho", "Vacina", "Medo",
+    "Espelho", "Banheiro"
+]
+
+# Função para padronizar tamanhos dos arrays
+def standardize_features(features):
+    max_length = max(feature.shape[0] for feature in features)
+    standardized = []
+    for feature in features:
+        padded = np.zeros(max_length)
+        padded[:len(feature)] = feature
+        standardized.append(padded)
+    return np.array(standardized)
+
+# Função para carregar centróides e montar o dataset
+def load_centroid_data(base_dir, classes):
+    dataset = []
+    for class_label, palavra in enumerate(classes):
+        palavra_dir = os.path.join(base_dir, palavra.lower())
+        for sinalizador in range(1, 13):
+            for video_num in range(1, 6):
+                for file_name in ["centroids.npy"]:
+                    centroid_path = os.path.join(
+                        palavra_dir, f"Sinalizador{sinalizador:02}/v{video_num}/{file_name}"
+                    )
+                    if os.path.exists(centroid_path):
+                        try:
+                            centroids = np.load(centroid_path)
+                            for centroid in centroids:
+                                dataset.append({"class": class_label, "features": centroid})
+                        except Exception as e:
+                            print(f"Erro ao carregar {centroid_path}: {e}")
+    return pd.DataFrame(dataset)
+
+# Carregar os dados
+df = load_centroid_data(BASE_DIR, CLASSES)
+
+# Padronizar features
+print("Padronizando os tamanhos das features...")
+standardized_features = standardize_features(df['features'].values)
+
+# Converter para arrays numpy
+X = np.array(standardized_features)
+y = df['class'].values
+
+# Verificar distribuição de classes
+class_counts = Counter(y)
+print("Distribuição de classes no dataset antes do oversampling:")
+for class_label, count in class_counts.items():
+    print(f"{CLASSES[class_label]}: {count} amostras")
+
+# Balancear as classes
+ros = RandomOverSampler(random_state=42)
+X_resampled, y_resampled = ros.fit_resample(X, y)
+
+# Verificar distribuição após balanceamento
+class_counts = Counter(y_resampled)
+print("\nDistribuição de classes no dataset após o oversampling:")
+for class_label, count in class_counts.items():
+    print(f"{CLASSES[class_label]}: {count} amostras")
+
+# Dividir os dados em treino e teste
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42, stratify=y_resampled)
+
+# Treinar o modelo
+clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf.fit(X_train, y_train)
+
+# Avaliar o modelo
+y_pred = clf.predict(X_test)
+unique_classes = np.unique(y_test)
+print("\nAcurácia no conjunto de teste:", accuracy_score(y_test, y_pred))
+print("\nRelatório de Classificação:\n", classification_report(y_test, y_pred, target_names=[CLASSES[i] for i in unique_classes], zero_division=0))
+
+# Salvar o modelo
+model_path = "random_forest_model_balanced_3.pkl"
+joblib.dump(clf, model_path)
+print(f"Modelo salvo como {model_path}")
+

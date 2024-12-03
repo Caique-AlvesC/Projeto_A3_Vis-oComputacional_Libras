@@ -1,0 +1,89 @@
+import cv2
+import mediapipe as mp
+import os
+import numpy as np
+
+# Lista de palavras em ordem alfabética
+palavras = [
+    "Acontecer", "Aluno", "Amarelo", "América", "Aproveitar", "Bala", "Banco", "Banheiro",
+    "Barulho", "Cinco", "Conhecer", "Espelho", "Esquina", "Filho", "Maçã", "Medo", 
+    "Ruim", "Sapo", "Vacina", "Vontade"
+]
+
+# Função para processar o vídeo e salvar landmarks combinados (Hands + Pose)
+def save_combined_landmarks(video_path, output_dir):
+    # Criação de instâncias do MediaPipe
+    mp_hands = mp.solutions.hands
+    mp_pose = mp.solutions.pose
+    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
+    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
+    
+    cap = cv2.VideoCapture(video_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    frame_count = 0
+    saved_landmarks = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Converte o frame para RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Processa landmarks das mãos e do corpo
+        hands_results = hands.process(rgb_frame)
+        pose_results = pose.process(rgb_frame)
+
+        # Lista para armazenar landmarks combinados
+        combined_landmarks = []
+
+        # Extrai landmarks das mãos
+        if hands_results.multi_hand_landmarks:
+            for hand_landmarks in hands_results.multi_hand_landmarks:
+                for lm in hand_landmarks.landmark:
+                    combined_landmarks.extend([lm.x, lm.y, lm.z])
+        else:
+            combined_landmarks.extend([0.0] * 63)  # 21 pontos * 3 dimensões para cada mão
+
+        # Extrai landmarks do corpo
+        if pose_results.pose_landmarks:
+            for lm in pose_results.pose_landmarks.landmark:
+                combined_landmarks.extend([lm.x, lm.y, lm.z])
+        else:
+            combined_landmarks.extend([0.0] * 99)  # 33 pontos * 3 dimensões
+
+        # Garante que o tamanho do vetor seja consistente
+        if len(combined_landmarks) == 162:  # 63 (mãos) + 99 (corpo) = 162
+            saved_landmarks.append(combined_landmarks)
+        else:
+            print(f"Frame {frame_count}: Landmarks inconsistentes detectados e descartados.")
+
+        frame_count += 1
+
+    # Salva os landmarks em formato .npy
+    output_file = os.path.join(output_dir, "landmarks.npy")
+    np.save(output_file, np.array(saved_landmarks))
+    print(f"{frame_count} frames processados e landmarks salvos em {output_file}")
+
+    cap.release()
+    hands.close()
+    pose.close()
+
+# Loop para processar todas as combinações
+for palavra_idx, palavra in enumerate(palavras, start=1):
+    palavra_code = f"{palavra_idx:02}"  # Garante que o código tenha dois dígitos
+    for sinalizador in range(1, 13):  # Sinalizadores 01 a 12
+        for video_num in range(1, 6):  # Vídeos 1 a 5
+            # Construir o caminho do vídeo
+            video_path = f"videos/{palavra_code}{palavra}Sinalizador{sinalizador:02}-{video_num}.mp4"
+            
+            # Construir o diretório de saída
+            output_dir = f"frames2/{palavra.lower()}/Sinalizador{sinalizador:02}/v{video_num}"
+            
+            print(f"Processando: {video_path} -> {output_dir}")
+            try:
+                save_combined_landmarks(video_path, output_dir)
+            except Exception as e:
+                print(f"Erro ao processar {video_path}: {e}")
